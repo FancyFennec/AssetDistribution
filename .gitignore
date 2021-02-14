@@ -1,9 +1,11 @@
 # Ignore everything
-*
+**/*
 
 # But not these files...
 !.gitignore
 
 # ...even if they are in subdirectories
-!/[Aa]ssets/Editor/*.cs
-!/[Aa]ssets/Scripts/*.cs
+!./Assets/Editor/AssetDistributor.cs
+!Assets/Scripts/*.cs
+
+
