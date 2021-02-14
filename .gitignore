@@ -5,5 +5,5 @@
 !.gitignore
 
 # ...even if they are in subdirectories
-!*./Assets/Editor/*
-!*./Assets/Scripts/*
+!/[Aa]ssets/Editor/*.cs
+!/[Aa]ssets/Scripts/*.cs
