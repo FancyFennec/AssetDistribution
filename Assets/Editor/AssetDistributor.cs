@@ -9,55 +9,51 @@ using Vector = MathNet.Numerics.LinearAlgebra.Vector<float>;
 [CustomEditor(typeof(AssetConsumer))]
 public class AssetDistributor : Editor
 {
-	AssetConsumer level;
-	public List<Vector3> verteces = new List<Vector3>();
+	AssetConsumer consumer;
+
 	public List<Vector2> points = new List<Vector2>();
-
-	public GameObject spawnable;
-
+	private bool editAssetDistribution = true;
 	private bool movePoints = true;
 	private bool addPoints = false;
-	private int editingPointIndex = 0;
 
-	private float density = 2f;
+	private int currentIndex = 0;
 
 	private void OnEnable()
 	{
-		level = (AssetConsumer)target;
-		if(level != null)
+		consumer = (AssetConsumer)target;
+		if(consumer != null && consumer.distributedAssets.Count > 0)
 		{
-			verteces = level.verteces;
 			ComputePointsInPolygon();
 		}
 	}
 
 	private void OnSceneGUI()
 	{
-		if (level != null)
+		if (consumer != null && consumer.distributedAssets.Count > 0)
 		{
 			if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.PageUp)
 			{
-				editingPointIndex = (editingPointIndex + 1) % verteces.Count;
+				consumer.setCurrentVertexIndex(currentIndex, (consumer.getCurrentVertexIndex(currentIndex) + 1) % consumer.getVertices(currentIndex).Count);
 			}
 			if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.PageDown)
 			{
-				editingPointIndex = (editingPointIndex - 1 + verteces.Count) % verteces.Count;
+				consumer.setCurrentVertexIndex(currentIndex, (consumer.getCurrentVertexIndex(currentIndex) - 1 + consumer.getVertices(currentIndex).Count) % consumer.getVertices(currentIndex).Count);
 			}
-			if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Backspace && verteces.Count > 0)
+			if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Backspace && consumer.getVertices(currentIndex).Count > 0)
 			{
 				RemoveVertex();
 			}
 
 			if (movePoints)
 			{
-				if (verteces.Count > 0)
+				if (consumer.getVertices(currentIndex).Count > 0)
 				{
 					EditorGUI.BeginChangeCheck();
-					Vector3 newVertex = Handles.PositionHandle(level.transform.position + verteces[editingPointIndex], Quaternion.identity);
+					Vector3 newVertex = Handles.PositionHandle(consumer.transform.position + consumer.getVertices(currentIndex)[consumer.getCurrentVertexIndex(currentIndex)], Quaternion.identity);
 
 					if (EditorGUI.EndChangeCheck())
 					{
-						verteces[editingPointIndex] = newVertex - level.transform.position;
+						consumer.getVertices(currentIndex)[consumer.getCurrentVertexIndex(currentIndex)] = newVertex - consumer.transform.position;
 						ComputePointsInPolygon();
 					}
 				}
@@ -72,84 +68,60 @@ public class AssetDistributor : Editor
 			}
 
 			DrawPoints();
-			DawLines(level, verteces);
-			DrawVerteces(level, verteces, editingPointIndex);
+			DawLines();
+			DrawVerteces();
 		}
-	}
-
-	private void DrawPoints()
-	{
-		Handles.color = Color.red;
-		points.ForEach(point =>
-		{
-			Handles.DrawSolidDisc(new Vector3(point.x, 0.02f, point.y) + level.transform.position, Camera.current.transform.forward, 0.05f);
-		});
-		Handles.color = Color.white;
-	}
-
-	private static void DrawVerteces(AssetConsumer level, List<Vector3> verteces, int editingPointIndex)
-	{
-		verteces.ForEach(vertex =>
-		{
-			if(verteces.IndexOf(vertex) == editingPointIndex)
-			{
-				Handles.color = Color.green;
-				Handles.DrawSolidDisc(level.transform.position + vertex, Camera.current.transform.forward, 0.1f);
-				Handles.color = Color.white;
-			} else
-			{
-				Handles.DrawSolidDisc(level.transform.position + vertex, Camera.current.transform.forward, 0.1f);
-			}
-			
-		});
-	}
-
-	private static void DawLines(AssetConsumer level, List<Vector3> verteces)
-	{
-		if (verteces.Count > 1)
-		{
-			for (int i = 0; i < verteces.Count; i++)
-			{
-				Vector3 startPoint = level.transform.position + verteces[i] + 0.02f * Vector3.up;
-				Vector3 endPoint = level.transform.position + verteces[(i + 1) % verteces.Count] + 0.02f * Vector3.up;
-				Debug.DrawLine(startPoint, endPoint);
-			}
-		}
-	}
-
-	private void AddNewVertex()
-	{
-		Ray mouseRay = HandleUtility.GUIPointToWorldRay(Event.current.mousePosition);
-		if (Physics.Raycast(mouseRay, out RaycastHit hit, Mathf.Infinity))
-		{
-			Vector3 mouseRayHit = hit.point;
-			if(verteces.Count == 0)
-			{
-				verteces.Add(mouseRayHit - level.transform.position);
-			} else
-			{
-				verteces.Insert(editingPointIndex + 1, mouseRayHit - level.transform.position);
-				editingPointIndex += 1;
-			}
-		}
-		ComputePointsInPolygon();
-	}
-
-	private void RemoveVertex()
-	{
-		verteces.RemoveAt(editingPointIndex);
-		editingPointIndex = verteces.Count == 0 ? 0 : (editingPointIndex - 1 + verteces.Count) % verteces.Count;
-		ComputePointsInPolygon();
 	}
 
 	public override void OnInspectorGUI()
 	{
-		spawnable = (GameObject) EditorGUILayout.ObjectField("Spawnable", spawnable, typeof(GameObject), false);
-
-		float newDensity = EditorGUILayout.FloatField("Density", density);
-		if(newDensity != density && newDensity > 0)
+		consumer.distributedAssets.ForEach(distributedAsset =>
 		{
-			density = newDensity;
+			if (GUILayout.Button(distributedAsset.name))
+			{
+				currentIndex = consumer.distributedAssets.IndexOf(distributedAsset);
+				ComputePointsInPolygon();
+			}
+		});
+
+		if (GUILayout.Button("Add Distributed Asset"))
+		{
+			consumer.distributedAssets.Add(new DistributedAsset());
+		}
+
+		if (EditorGUILayout.Toggle("Edit Distributed Asset", editAssetDistribution))
+		{
+			editAssetDistribution = true;
+		}
+		else
+		{
+			editAssetDistribution = false;
+		}
+
+		if(editAssetDistribution && consumer.distributedAssets.Count > 0) EditDistributionGui();
+	}
+
+	private void EditDistributionGui()
+	{
+		if(consumer.distributedAssets[currentIndex].spawnables.Count > 0)
+		{
+			List<GameObject> spawnables = new List<GameObject>(consumer.distributedAssets[currentIndex].spawnables);
+			spawnables.ForEach(spawnable =>
+			{
+				int index = spawnables.IndexOf(spawnable);
+				consumer.distributedAssets[currentIndex].spawnables[index] = (GameObject)EditorGUILayout.ObjectField("Spawnable", spawnable, typeof(GameObject), false);
+			});
+		}
+
+		if (GUILayout.Button("Add Spawnable"))
+		{
+			consumer.distributedAssets[currentIndex].spawnables.Add(null);
+		}
+
+		float newDensity = EditorGUILayout.FloatField("Density", consumer.distributedAssets[currentIndex].density);
+		if (newDensity != consumer.distributedAssets[currentIndex].density && newDensity > 0)
+		{
+			consumer.distributedAssets[currentIndex].density = newDensity;
 			ComputePointsInPolygon();
 		}
 
@@ -159,34 +131,24 @@ public class AssetDistributor : Editor
 		}
 		if (GUILayout.Button("Spawn Objects"))
 		{
-			if (spawnable != null)
+			if (consumer.distributedAssets[currentIndex].spawnables.Count > 0)
 			{
-				GameObject newChild = new GameObject();
-				newChild.name = "NewChild";
-				newChild.transform.parent = level.transform;
-
-				points.ForEach(point => {
-					GameObject spawnedObject = Instantiate(
-						spawnable, 
-						new Vector3(point.x, 0f, point.y) + level.transform.position, 
-						Quaternion.Euler(0f, Random.Range(0f, 360f), 0f),
-						newChild.transform);
-					spawnedObject.transform.localScale = Vector3.one * Random.Range(0.1f, 0.2f);
-				});
+				SpawnObjects();
 			}
 		}
 		if (GUILayout.Button("Clear Verteces"))
 		{
-			verteces.Clear();
+			consumer.distributedAssets[currentIndex].vertices.Clear();
 			points.Clear();
-			editingPointIndex = 0;
+			consumer.distributedAssets[currentIndex].currentVertexIndex = 0;
 		}
-		if(EditorGUILayout.Toggle("Add Points", addPoints))
+		if (EditorGUILayout.Toggle("Add Points", addPoints))
 		{
 			addPoints = true;
 			movePoints = false;
 			Tools.current = Tool.None;
-		} else
+		}
+		else
 		{
 			addPoints = false;
 		}
@@ -194,7 +156,9 @@ public class AssetDistributor : Editor
 		{
 			movePoints = true;
 			addPoints = false;
-			editingPointIndex = Mathf.Clamp(editingPointIndex, 0, verteces.Count - 1);
+			consumer.distributedAssets[currentIndex].currentVertexIndex = Mathf.Clamp(
+				consumer.distributedAssets[currentIndex].currentVertexIndex,
+				0, consumer.distributedAssets[currentIndex].vertices.Count - 1);
 			Tools.current = Tool.None;
 		}
 		else
@@ -203,14 +167,105 @@ public class AssetDistributor : Editor
 		}
 	}
 
+	private void SpawnObjects()
+	{
+		GameObject newChild = new GameObject();
+		newChild.name = consumer.distributedAssets[currentIndex].name;
+		newChild.transform.parent = consumer.transform;
+
+		points.ForEach(point =>
+		{
+			GameObject spawnedObject = Instantiate(
+				consumer.distributedAssets[currentIndex].spawnables[0],
+				new Vector3(point.x, 0f, point.y) + consumer.transform.position,
+				Quaternion.Euler(0f, Random.Range(0f, 360f), 0f),
+				newChild.transform);
+			spawnedObject.transform.localScale = Vector3.one * Random.Range(0.1f, 0.2f);
+		});
+	}
+
+	private void DrawPoints()
+	{
+		Handles.color = Color.red;
+		points.ForEach(point =>
+		{
+			Handles.DrawSolidDisc(new Vector3(point.x, 0.02f, point.y) + consumer.transform.position, Camera.current.transform.forward, 0.05f);
+		});
+		Handles.color = Color.white;
+	}
+
+	private void DrawVerteces()
+	{
+		consumer.getVertices(currentIndex).ForEach(vertex =>
+		{
+			if (consumer.getVertices(currentIndex).IndexOf(vertex) == consumer.getCurrentVertexIndex(currentIndex))
+			{
+				Handles.color = Color.green;
+				Handles.DrawSolidDisc(consumer.transform.position + vertex, Camera.current.transform.forward, 0.1f);
+				Handles.color = Color.white;
+			}
+			else
+			{
+				Handles.DrawSolidDisc(consumer.transform.position + vertex, Camera.current.transform.forward, 0.1f);
+			}
+		});
+	}
+
+	private void DawLines()
+	{
+		if (consumer.distributedAssets[currentIndex].vertices.Count > 1)
+		{
+			List<Vector3> vertices = consumer.distributedAssets[currentIndex].vertices;
+			vertices.ForEach(vertex =>
+			{
+				int index = vertices.IndexOf(vertex);
+				Vector3 startPoint = consumer.transform.position + vertex + 0.02f * Vector3.up;
+				Vector3 endPoint = consumer.transform.position + vertices[(index + 1) % vertices.Count] + 0.02f * Vector3.up;
+				Debug.DrawLine(startPoint, endPoint);
+			});
+		}
+	}
+
+	private void AddNewVertex()
+	{
+		List<Vector3> vertices = consumer.distributedAssets[currentIndex].vertices;
+		Ray mouseRay = HandleUtility.GUIPointToWorldRay(Event.current.mousePosition);
+		if (Physics.Raycast(mouseRay, out RaycastHit hit, Mathf.Infinity))
+		{
+			Vector3 mouseRayHit = hit.point;
+			if (vertices.Count == 0)
+			{
+				vertices.Add(mouseRayHit - consumer.transform.position);
+			}
+			else
+			{
+				vertices.Insert(consumer.distributedAssets[currentIndex].currentVertexIndex + 1, mouseRayHit - consumer.transform.position);
+				consumer.distributedAssets[currentIndex].currentVertexIndex += 1;
+			}
+		}
+		ComputePointsInPolygon();
+	}
+
+	private void RemoveVertex()
+	{
+		int vertexCount = consumer.getVertices(currentIndex).Count;
+		int currentVertexIndex = consumer.getCurrentVertexIndex(currentIndex);
+		consumer.getVertices(currentIndex).RemoveAt(currentVertexIndex);
+		
+		consumer.setCurrentVertexIndex(currentIndex, vertexCount == 0 ? 0 : (currentVertexIndex - 1 + vertexCount) % vertexCount);
+		ComputePointsInPolygon();
+	}
+
 	private void ComputePointsInPolygon()
 	{
 		points.Clear();
 
-		if(verteces.Count > 2)
+		if(consumer.getVertices(currentIndex).Count > 2)
 		{
-			IEnumerable<float> xStream = verteces.Select(vertex => vertex.x);
-			IEnumerable<float> yStream = verteces.Select(vertex => vertex.z);
+			IEnumerable<float> xStream = consumer.getVertices(currentIndex).Select(vertex => vertex.x);
+			IEnumerable<float> yStream = consumer.getVertices(currentIndex).Select(vertex => vertex.z);
+
+			float density = consumer.getDensity(currentIndex);
 
 			int xStart = Mathf.FloorToInt(xStream.Min() * density);
 			int xAmount = Mathf.CeilToInt(xStream.Max() * density) - xStart;
@@ -220,12 +275,12 @@ public class AssetDistributor : Editor
 			List<int> xRange = Enumerable.Range(xStart, xAmount).ToList();
 			List<int> yRange = Enumerable.Range(yStart, yAmount).ToList();
 
-			Vector2 offset = new Vector2(level.transform.position.x, level.transform.position.z);
+			Vector2 offset = new Vector2(consumer.transform.position.x, consumer.transform.position.z);
 
 			xRange.ForEach(x => yRange.ForEach(y =>
 			{
 				Vector2 newPoint = new Vector2(x / density, y / density);
-				if (IsPointInsidePolygon(level, newPoint + offset))
+				if (IsPointInsidePolygon(consumer, newPoint + offset))
 				{
 					points.Add(newPoint);
 				}
@@ -235,7 +290,7 @@ public class AssetDistributor : Editor
 
 	private bool IsPointInsidePolygon(AssetConsumer level, Vector2 point)
 	{
-		List<Vector2> verteces2D = verteces.Select(vertex => 
+		List<Vector2> verteces2D = consumer.getVertices(currentIndex).Select(vertex => 
 		new Vector2(level.transform.position.x + vertex.x, level.transform.position.z + vertex.z)).ToList();
 		float maxX = verteces2D.Select(vertex => vertex.x).Max() + 1;
 		Vector2 inftyPoint = new Vector2(maxX, 0);
