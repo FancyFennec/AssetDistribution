@@ -75,18 +75,36 @@ public class AssetDistributor : Editor
 
 	public override void OnInspectorGUI()
 	{
-		consumer.distributedAssets.ForEach(distributedAsset =>
+		List<DistributedAsset> distributedAssets = new List<DistributedAsset>(consumer.distributedAssets);
+		distributedAssets.ForEach(distributedAsset =>
 		{
-			if (GUILayout.Button(distributedAsset.name))
+			int index = distributedAssets.IndexOf(distributedAsset);
+			GUILayout.BeginHorizontal();
+			var style = new GUIStyle(GUI.skin.button);
+			if (index == currentIndex)
 			{
-				currentIndex = consumer.distributedAssets.IndexOf(distributedAsset);
+				style.normal.textColor = Color.yellow;
+			}
+			if (GUILayout.Button("Asset Distribution " + index, style))
+			{
+				currentIndex = index;
 				ComputePointsInPolygon();
 			}
+			if (GUILayout.Button("-", GUILayout.Width(20)))
+			{
+				consumer.distributedAssets.RemoveAt(index);
+				if(currentIndex >= index)
+				{
+					currentIndex = currentIndex == 0 ? 0 : currentIndex - 1;
+				}
+			}
+			GUILayout.EndHorizontal();
 		});
 
 		if (GUILayout.Button("Add Distributed Asset"))
 		{
 			consumer.distributedAssets.Add(new DistributedAsset());
+			currentIndex = consumer.distributedAssets.Count - 1;
 		}
 
 		if (EditorGUILayout.Toggle("Edit Distributed Asset", editAssetDistribution))
