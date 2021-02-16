@@ -121,16 +121,7 @@ public class AssetDistributor : Editor
 
 	private void EditDistributionGui()
 	{
-		if(consumer.distributedAssets[currentIndex].spawnables.Count > 0)
-		{
-			List<GameObject> spawnables = new List<GameObject>(consumer.distributedAssets[currentIndex].spawnables);
-			spawnables.ForEach(spawnable =>
-			{
-				int index = spawnables.IndexOf(spawnable);
-				consumer.distributedAssets[currentIndex].spawnables[index] = (GameObject)EditorGUILayout.ObjectField("Spawnable", spawnable, typeof(GameObject), false);
-			});
-		}
-
+		ListSpawnables();
 		if (GUILayout.Button("Add Spawnable"))
 		{
 			consumer.distributedAssets[currentIndex].spawnables.Add(null);
@@ -142,17 +133,13 @@ public class AssetDistributor : Editor
 			consumer.distributedAssets[currentIndex].density = newDensity;
 			ComputePointsInPolygon();
 		}
-
-		if (GUILayout.Button("Compute points in Polygon"))
-		{
-			ComputePointsInPolygon();
-		}
 		if (GUILayout.Button("Spawn Objects"))
 		{
-			if (consumer.distributedAssets[currentIndex].spawnables.Count > 0)
-			{
-				SpawnObjects();
-			}
+			SpawnObjects();
+		}
+		if (GUILayout.Button("Clear Objects"))
+		{
+			ClearObjects();
 		}
 		if (GUILayout.Button("Clear Verteces"))
 		{
@@ -185,21 +172,80 @@ public class AssetDistributor : Editor
 		}
 	}
 
+	private void ListSpawnables()
+	{
+		if (consumer.distributedAssets[currentIndex].spawnables.Count > 0)
+		{
+			int indexToBeRemoved = 0;
+			bool removeSpawnable = false;
+
+			List<GameObject> spawnables = new List<GameObject>(consumer.distributedAssets[currentIndex].spawnables);
+			for(int index = 0; index < spawnables.Count; index++)
+			{
+				GUILayout.BeginHorizontal();
+				consumer.distributedAssets[currentIndex].spawnables[index] = (GameObject)EditorGUILayout.ObjectField("Spawnable", spawnables[index], typeof(GameObject), false);
+
+				if (GUILayout.Button("-", GUILayout.Width(20)))
+				{
+					removeSpawnable = true;
+					indexToBeRemoved = index;
+				}
+				GUILayout.EndHorizontal();
+			}
+			if(removeSpawnable) consumer.distributedAssets[currentIndex].spawnables.RemoveAt(indexToBeRemoved);
+		}
+	}
+
+	private void ClearObjects()
+	{
+		if (consumer.distributedAssets[currentIndex].spawnables.Count > 0 && consumer.transform.childCount > 0)
+		{
+			Transform assets = consumer.transform.Find(consumer.distributedAssets[currentIndex].name);
+			while (assets.childCount > 0)
+			{
+				foreach (Transform child in assets)
+				{
+					DestroyImmediate(child.gameObject);
+				}
+			}
+				
+		}
+	}
+
 	private void SpawnObjects()
 	{
-		GameObject newChild = new GameObject();
-		newChild.name = consumer.distributedAssets[currentIndex].name;
-		newChild.transform.parent = consumer.transform;
-
-		points.ForEach(point =>
+		if (consumer.distributedAssets[currentIndex].spawnables.Count > 0)
 		{
-			GameObject spawnedObject = Instantiate(
-				consumer.distributedAssets[currentIndex].spawnables[0],
-				new Vector3(point.x, 0f, point.y) + consumer.transform.position,
-				Quaternion.Euler(0f, Random.Range(0f, 360f), 0f),
-				newChild.transform);
-			spawnedObject.transform.localScale = Vector3.one * Random.Range(0.1f, 0.2f);
-		});
+			GameObject child;
+			Transform childTransform = consumer.transform.Find(consumer.distributedAssets[currentIndex].name);
+			if(childTransform == null)
+			{
+				child = new GameObject();
+			} else
+			{
+				child = childTransform.gameObject;
+			}
+			child.name = consumer.distributedAssets[currentIndex].name;
+			child.transform.parent = consumer.transform;
+			List<GameObject> spawnables = consumer.distributedAssets[currentIndex].spawnables;
+			points.ForEach(point =>
+			{
+				GameObject spawnable = spawnables[Random.Range(0, spawnables.Count)];
+				float density = consumer.distributedAssets[currentIndex].density;
+				float xOffset = Random.Range(-0.5f / density, 0.5f / density);
+				float yOffset = Random.Range(-0.5f / density, 0.5f / density);
+				Vector3 randomOffset = new Vector3(xOffset, 0f, yOffset);
+				if(spawnable != null)
+				{
+					GameObject spawnedObject = Instantiate(
+					spawnable,
+					new Vector3(point.x, 0f, point.y) + consumer.transform.position + randomOffset,
+					Quaternion.Euler(0f, Random.Range(0f, 360f), 0f),
+					child.transform);
+					spawnedObject.transform.localScale = Vector3.one * Random.Range(0.1f, 0.2f);
+				}
+			});
+		}
 	}
 
 	private void DrawPoints()
