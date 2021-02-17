@@ -35,9 +35,10 @@ public class DistributedAsset
 		  .Select(s => s[Random.Range(0, chars.Length)]).ToArray());
 	}
 
-	public string name = RandomString(12);
+	public static readonly string DIS_AS_PREFIX = "DAS";
+	public string name = DIS_AS_PREFIX + "-" + RandomString(9);
 	public List<Vector3> vertices = new List<Vector3>();
 	public List<GameObject> spawnables = new List<GameObject>();
-	public float density = 2f;
+	public float density = 1f;
 	public int currentVertexIndex = 0;
 }

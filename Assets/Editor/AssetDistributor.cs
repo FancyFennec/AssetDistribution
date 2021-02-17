@@ -20,10 +20,30 @@ public class AssetDistributor : Editor
 
 	private void OnEnable()
 	{
-		consumer = (AssetConsumer)target;
-		if(consumer != null && consumer.distributedAssets.Count > 0)
+		consumer = (AssetConsumer) target;
+		if (consumer != null && consumer.distributedAssets.Count > 0)
 		{
 			ComputePointsInPolygon();
+		}
+
+		foreach (Transform child in consumer.transform)
+		{
+			int index = consumer.distributedAssets.FindIndex(distAs => distAs.name == child.name);
+			if (index < 0 && child.name.StartsWith(DistributedAsset.DIS_AS_PREFIX))
+			{
+				DistributedAsset distAsset = new DistributedAsset();
+				distAsset.name = child.name;
+				foreach (Transform spawnable in child.transform)
+				{
+					GameObject prefab = PrefabUtility.GetCorrespondingObjectFromSource(spawnable.gameObject);
+					int blub = distAsset.spawnables.FindIndex(spwn => spwn.name == prefab.name);
+					if (prefab != null &&  0 > blub)
+					{
+						distAsset.spawnables.Add(prefab);
+					}
+				}
+				consumer.distributedAssets.Add(distAsset);
+			}
 		}
 	}
 
@@ -230,19 +250,24 @@ public class AssetDistributor : Editor
 			List<GameObject> spawnables = consumer.distributedAssets[currentIndex].spawnables;
 			points.ForEach(point =>
 			{
-				GameObject spawnable = spawnables[Random.Range(0, spawnables.Count)];
 				float density = consumer.distributedAssets[currentIndex].density;
 				float xOffset = Random.Range(-0.5f / density, 0.5f / density);
 				float yOffset = Random.Range(-0.5f / density, 0.5f / density);
 				Vector3 randomOffset = new Vector3(xOffset, 0f, yOffset);
-				if(spawnable != null)
+				Vector3 rayOrigin = new Vector3(point.x, 0f, point.y) + consumer.transform.position + randomOffset + 100f * Vector3.up;
+
+				Ray mouseRay = new Ray(rayOrigin, Vector3.down);
+				if (Physics.Raycast(mouseRay, out RaycastHit hit, Mathf.Infinity))
 				{
-					GameObject spawnedObject = Instantiate(
-					spawnable,
-					new Vector3(point.x, 0f, point.y) + consumer.transform.position + randomOffset,
-					Quaternion.Euler(0f, Random.Range(0f, 360f), 0f),
-					child.transform);
-					spawnedObject.transform.localScale = Vector3.one * Random.Range(0.1f, 0.2f);
+					GameObject spawnable = spawnables[Random.Range(0, spawnables.Count)];
+
+					if (spawnable != null)
+					{
+						GameObject spawnedObject = (GameObject) PrefabUtility.InstantiatePrefab(spawnable, child.transform);
+						spawnedObject.transform.position = hit.point;
+						spawnedObject.transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
+						spawnedObject.transform.localScale = Vector3.one * Random.Range(0.75f, 1.25f);
+					}
 				}
 			});
 		}
