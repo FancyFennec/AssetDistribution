@@ -15,16 +15,13 @@ public class AssetDistributor : Editor
 	private bool editAssetDistribution = true;
 	private bool movePoints = true;
 	private bool addPoints = false;
+	private float randomness = 1f;
 
 	private int currentIndex = 0;
 
 	private void OnEnable()
 	{
 		consumer = (AssetConsumer) target;
-		if (consumer != null && consumer.distributedAssets.Count > 0)
-		{
-			ComputePointsInPolygon();
-		}
 
 		foreach (Transform child in consumer.transform)
 		{
@@ -74,7 +71,6 @@ public class AssetDistributor : Editor
 					if (EditorGUI.EndChangeCheck())
 					{
 						consumer.getVertices(currentIndex)[consumer.getCurrentVertexIndex(currentIndex)] = newVertex - consumer.transform.position;
-						ComputePointsInPolygon();
 					}
 				}
 			}
@@ -87,8 +83,7 @@ public class AssetDistributor : Editor
 				}
 			}
 
-			DrawPoints();
-			DawLines();
+			DrawLines();
 			DrawVerteces();
 		}
 	}
@@ -108,7 +103,6 @@ public class AssetDistributor : Editor
 			if (GUILayout.Button("Asset Distribution " + index, style))
 			{
 				currentIndex = index;
-				ComputePointsInPolygon();
 			}
 			if (GUILayout.Button("-", GUILayout.Width(20)))
 			{
@@ -146,28 +140,18 @@ public class AssetDistributor : Editor
 		{
 			consumer.distributedAssets[currentIndex].spawnables.Add(null);
 		}
-
-		float newDensity = EditorGUILayout.FloatField("Density", consumer.distributedAssets[currentIndex].density);
-		if (newDensity != consumer.distributedAssets[currentIndex].density && newDensity > 0)
-		{
-			consumer.distributedAssets[currentIndex].density = newDensity;
-			ComputePointsInPolygon();
-		}
+		consumer.distributedAssets[currentIndex].density = EditorGUILayout.Slider("Density", consumer.distributedAssets[currentIndex].density, 0.0001f, 5f);
+		randomness = EditorGUILayout.Slider("Randomness", randomness, 0f, 1f); ;
 		if (GUILayout.Button("Spawn Objects"))
 		{
+			ComputePointsInPolygon();
 			SpawnObjects();
 		}
 		if (GUILayout.Button("Clear Objects"))
 		{
 			ClearObjects();
 		}
-		if (GUILayout.Button("Clear Verteces"))
-		{
-			consumer.distributedAssets[currentIndex].vertices.Clear();
-			points.Clear();
-			consumer.distributedAssets[currentIndex].currentVertexIndex = 0;
-		}
-		if (EditorGUILayout.Toggle("Add Points", addPoints))
+		if (EditorGUILayout.Toggle("Add Vertex", addPoints))
 		{
 			addPoints = true;
 			movePoints = false;
@@ -177,7 +161,7 @@ public class AssetDistributor : Editor
 		{
 			addPoints = false;
 		}
-		if (EditorGUILayout.Toggle("Move Points", movePoints))
+		if (EditorGUILayout.Toggle("Move Vertices", movePoints))
 		{
 			movePoints = true;
 			addPoints = false;
@@ -189,6 +173,12 @@ public class AssetDistributor : Editor
 		else
 		{
 			movePoints = false;
+		}
+		if (GUILayout.Button("Clear Verteces"))
+		{
+			consumer.distributedAssets[currentIndex].vertices.Clear();
+			points.Clear();
+			consumer.distributedAssets[currentIndex].currentVertexIndex = 0;
 		}
 	}
 
@@ -241,19 +231,20 @@ public class AssetDistributor : Editor
 			if(childTransform == null)
 			{
 				child = new GameObject();
+				child.name = consumer.distributedAssets[currentIndex].name;
+				child.transform.parent = consumer.transform;
 			} else
 			{
 				child = childTransform.gameObject;
 			}
-			child.name = consumer.distributedAssets[currentIndex].name;
-			child.transform.parent = consumer.transform;
+			
 			List<GameObject> spawnables = consumer.distributedAssets[currentIndex].spawnables;
 			points.ForEach(point =>
 			{
 				float density = consumer.distributedAssets[currentIndex].density;
 				float xOffset = Random.Range(-0.5f / density, 0.5f / density);
-				float yOffset = Random.Range(-0.5f / density, 0.5f / density);
-				Vector3 randomOffset = new Vector3(xOffset, 0f, yOffset);
+				float yOffset =  Random.Range(-0.5f / density, 0.5f / density);
+				Vector3 randomOffset = randomness * new Vector3(xOffset, 0f, yOffset);
 				Vector3 rayOrigin = new Vector3(point.x, 0f, point.y) + consumer.transform.position + randomOffset + 100f * Vector3.up;
 
 				Ray mouseRay = new Ray(rayOrigin, Vector3.down);
@@ -266,41 +257,26 @@ public class AssetDistributor : Editor
 						GameObject spawnedObject = (GameObject) PrefabUtility.InstantiatePrefab(spawnable, child.transform);
 						spawnedObject.transform.position = hit.point;
 						spawnedObject.transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
-						spawnedObject.transform.localScale = Vector3.one * Random.Range(0.75f, 1.25f);
+						spawnedObject.transform.localScale = Vector3.one * (1 - randomness * Random.Range(-0.25f, 0.25f));
 					}
 				}
 			});
 		}
 	}
 
-	private void DrawPoints()
-	{
-		Handles.color = Color.red;
-		points.ForEach(point =>
-		{
-			Handles.DrawSolidDisc(new Vector3(point.x, 0.02f, point.y) + consumer.transform.position, Camera.current.transform.forward, 0.05f);
-		});
-		Handles.color = Color.white;
-	}
-
 	private void DrawVerteces()
 	{
 		consumer.getVertices(currentIndex).ForEach(vertex =>
 		{
-			if (consumer.getVertices(currentIndex).IndexOf(vertex) == consumer.getCurrentVertexIndex(currentIndex))
-			{
-				Handles.color = Color.green;
-				Handles.DrawSolidDisc(consumer.transform.position + vertex, Camera.current.transform.forward, 0.1f);
-				Handles.color = Color.white;
-			}
-			else
-			{
-				Handles.DrawSolidDisc(consumer.transform.position + vertex, Camera.current.transform.forward, 0.1f);
-			}
+			int index = consumer.getVertices(currentIndex).IndexOf(vertex);
+
+			Handles.color = index == consumer.getCurrentVertexIndex(currentIndex) ? Color.green : Color.white;
+			Handles.DrawSolidDisc(consumer.transform.position + vertex, Camera.current.transform.forward, 0.1f);
+			Handles.color = Color.white;
 		});
 	}
 
-	private void DawLines()
+	private void DrawLines()
 	{
 		if (consumer.distributedAssets[currentIndex].vertices.Count > 1)
 		{
@@ -308,9 +284,13 @@ public class AssetDistributor : Editor
 			vertices.ForEach(vertex =>
 			{
 				int index = vertices.IndexOf(vertex);
+
 				Vector3 startPoint = consumer.transform.position + vertex + 0.02f * Vector3.up;
 				Vector3 endPoint = consumer.transform.position + vertices[(index + 1) % vertices.Count] + 0.02f * Vector3.up;
-				Debug.DrawLine(startPoint, endPoint);
+
+				Handles.color = index == consumer.getCurrentVertexIndex(currentIndex) ? Color.green : Color.white;
+				Handles.DrawLine(startPoint, endPoint);
+				Handles.color = Color.white;
 			});
 		}
 	}
@@ -332,17 +312,15 @@ public class AssetDistributor : Editor
 				consumer.distributedAssets[currentIndex].currentVertexIndex += 1;
 			}
 		}
-		ComputePointsInPolygon();
 	}
 
 	private void RemoveVertex()
 	{
-		int vertexCount = consumer.getVertices(currentIndex).Count;
 		int currentVertexIndex = consumer.getCurrentVertexIndex(currentIndex);
 		consumer.getVertices(currentIndex).RemoveAt(currentVertexIndex);
-		
+
+		int vertexCount = consumer.getVertices(currentIndex).Count;
 		consumer.setCurrentVertexIndex(currentIndex, vertexCount == 0 ? 0 : (currentVertexIndex - 1 + vertexCount) % vertexCount);
-		ComputePointsInPolygon();
 	}
 
 	private void ComputePointsInPolygon()
@@ -392,13 +370,13 @@ public class AssetDistributor : Editor
 		return intersectionCount % 2 == 1;
 	}
 
-	public bool LineLineIntersection(Vector2 linePoint1, Vector2 lineVec1, Vector2 linePoint2, Vector2 lineVec2)
+	public bool LineLineIntersection(Vector2 point1, Vector2 vec1, Vector2 point2, Vector2 vec2)
 	{
 		Matrix A = Matrix.Build.DenseOfArray(new float[,] {
-			 {-lineVec1.x, lineVec2.x},
-			 {-lineVec1.y, lineVec2.y}});
+			 {-vec1.x, vec2.x},
+			 {-vec1.y, vec2.y}});
 
-		Vector b = Vector.Build.Dense(new float[] { (linePoint1 - linePoint2).x, (linePoint1 - linePoint2).y });
+		Vector b = Vector.Build.Dense(new float[] { (point1 - point2).x, (point1 - point2).y });
 
 		if (A.Determinant() != 0f)
 		{
@@ -408,10 +386,5 @@ public class AssetDistributor : Editor
 		{
 			return false;
 		}
-	}
-
-	public float Determinant(Vector2 a, Vector2 b)
-	{
-		return (float)(a.x * b.y - a.y * b.x);
 	}
 }
