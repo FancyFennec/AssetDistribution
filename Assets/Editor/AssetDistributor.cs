@@ -13,8 +13,7 @@ public class AssetDistributor : Editor
 
 	public List<Vector2> points = new List<Vector2>();
 	private bool editAssetDistribution = true;
-	private bool movePoints = true;
-	private bool addPoints = false;
+	private bool editPolygon = true;
 	private float randomness = 1f;
 
 	private int currentIndex = 0;
@@ -46,8 +45,16 @@ public class AssetDistributor : Editor
 
 	private void OnSceneGUI()
 	{
-		if (consumer != null && consumer.distributedAssets.Count > 0)
+		if (editPolygon && consumer != null && consumer.distributedAssets.Count > 0)
 		{
+			DrawPositionHandle();
+			DrawLines();
+			DrawVerteces();
+
+			if (!GUI.changed && !Event.current.alt && Event.current.type == EventType.MouseDown && Event.current.button == 0)
+			{
+				AddNewVertex();
+			}
 			if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.PageUp)
 			{
 				consumer.setCurrentVertexIndex(currentIndex, (consumer.getCurrentVertexIndex(currentIndex) + 1) % consumer.getVertices(currentIndex).Count);
@@ -60,36 +67,12 @@ public class AssetDistributor : Editor
 			{
 				RemoveVertex();
 			}
-
-			if (movePoints)
-			{
-				if (consumer.getVertices(currentIndex).Count > 0)
-				{
-					EditorGUI.BeginChangeCheck();
-					Vector3 newVertex = Handles.PositionHandle(consumer.transform.position + consumer.getVertices(currentIndex)[consumer.getCurrentVertexIndex(currentIndex)], Quaternion.identity);
-
-					if (EditorGUI.EndChangeCheck())
-					{
-						consumer.getVertices(currentIndex)[consumer.getCurrentVertexIndex(currentIndex)] = newVertex - consumer.transform.position;
-					}
-				}
-			}
-
-			if (addPoints)
-			{
-				if (Event.current.type == EventType.MouseDown && Event.current.button == 0)
-				{
-					AddNewVertex();
-				}
-			}
-
-			DrawLines();
-			DrawVerteces();
 		}
 	}
 
 	public override void OnInspectorGUI()
 	{
+		GUILayout.Label("Layers");
 		List<DistributedAsset> distributedAssets = new List<DistributedAsset>(consumer.distributedAssets);
 		distributedAssets.ForEach(distributedAsset =>
 		{
@@ -100,7 +83,7 @@ public class AssetDistributor : Editor
 			{
 				style.normal.textColor = Color.yellow;
 			}
-			if (GUILayout.Button("Asset Distribution " + index, style))
+			if (GUILayout.Button("Layer " + index, style))
 			{
 				currentIndex = index;
 			}
@@ -115,13 +98,13 @@ public class AssetDistributor : Editor
 			GUILayout.EndHorizontal();
 		});
 
-		if (GUILayout.Button("Add Distributed Asset"))
+		if (GUILayout.Button("Add Layer"))
 		{
 			consumer.distributedAssets.Add(new DistributedAsset());
 			currentIndex = consumer.distributedAssets.Count - 1;
 		}
 
-		if (EditorGUILayout.Toggle("Edit Distributed Asset", editAssetDistribution))
+		if (EditorGUILayout.Toggle("Edit Layer", editAssetDistribution))
 		{
 			editAssetDistribution = true;
 		}
@@ -135,11 +118,13 @@ public class AssetDistributor : Editor
 
 	private void EditDistributionGui()
 	{
+		GUILayout.Label("Spawnable Objects");
 		ListSpawnables();
 		if (GUILayout.Button("Add Spawnable"))
 		{
 			consumer.distributedAssets[currentIndex].spawnables.Add(null);
 		}
+		GUILayout.Label("Distribution Properties");
 		consumer.distributedAssets[currentIndex].density = EditorGUILayout.Slider("Density", consumer.distributedAssets[currentIndex].density, 0.0001f, 5f);
 		randomness = EditorGUILayout.Slider("Randomness", randomness, 0f, 1f); ;
 		if (GUILayout.Button("Spawn Objects"))
@@ -151,20 +136,10 @@ public class AssetDistributor : Editor
 		{
 			ClearObjects();
 		}
-		if (EditorGUILayout.Toggle("Add Vertex", addPoints))
+		GUILayout.Label("Edit Polygon");
+		if (EditorGUILayout.Toggle("Edit Polygon", editPolygon))
 		{
-			addPoints = true;
-			movePoints = false;
-			Tools.current = Tool.None;
-		}
-		else
-		{
-			addPoints = false;
-		}
-		if (EditorGUILayout.Toggle("Move Vertices", movePoints))
-		{
-			movePoints = true;
-			addPoints = false;
+			editPolygon = true;
 			consumer.distributedAssets[currentIndex].currentVertexIndex = Mathf.Clamp(
 				consumer.distributedAssets[currentIndex].currentVertexIndex,
 				0, consumer.distributedAssets[currentIndex].vertices.Count - 1);
@@ -172,9 +147,9 @@ public class AssetDistributor : Editor
 		}
 		else
 		{
-			movePoints = false;
+			editPolygon = false;
 		}
-		if (GUILayout.Button("Clear Verteces"))
+		if (GUILayout.Button("Clear Polygon"))
 		{
 			consumer.distributedAssets[currentIndex].vertices.Clear();
 			points.Clear();
@@ -193,7 +168,7 @@ public class AssetDistributor : Editor
 			for(int index = 0; index < spawnables.Count; index++)
 			{
 				GUILayout.BeginHorizontal();
-				consumer.distributedAssets[currentIndex].spawnables[index] = (GameObject)EditorGUILayout.ObjectField("Spawnable", spawnables[index], typeof(GameObject), false);
+				consumer.distributedAssets[currentIndex].spawnables[index] = (GameObject) EditorGUILayout.ObjectField(spawnables[index], typeof(GameObject), false);
 
 				if (GUILayout.Button("-", GUILayout.Width(20)))
 				{
@@ -264,6 +239,27 @@ public class AssetDistributor : Editor
 		}
 	}
 
+	private void DrawPositionHandle()
+	{
+		if (consumer.getVertices(currentIndex).Count > 0)
+		{
+			EditorGUI.BeginChangeCheck();
+			Vector3 newVertex = Handles.PositionHandle(consumer.transform.position + consumer.getVertices(currentIndex)[consumer.getCurrentVertexIndex(currentIndex)], Quaternion.identity);
+
+			if (EditorGUI.EndChangeCheck())
+			{
+				Ray mouseRay = new Ray(newVertex + Vector3.up * 100f, Vector3.down);
+				if (Physics.Raycast(mouseRay, out RaycastHit hit, Mathf.Infinity))
+				{
+					consumer.getVertices(currentIndex)[consumer.getCurrentVertexIndex(currentIndex)] = hit.point - consumer.transform.position;
+				} else
+				{
+					consumer.getVertices(currentIndex)[consumer.getCurrentVertexIndex(currentIndex)] = newVertex - consumer.transform.position;
+				}
+			}
+		}
+	}
+
 	private void DrawVerteces()
 	{
 		consumer.getVertices(currentIndex).ForEach(vertex =>
@@ -281,17 +277,13 @@ public class AssetDistributor : Editor
 		if (consumer.distributedAssets[currentIndex].vertices.Count > 1)
 		{
 			List<Vector3> vertices = consumer.distributedAssets[currentIndex].vertices;
-			vertices.ForEach(vertex =>
-			{
-				int index = vertices.IndexOf(vertex);
 
-				Vector3 startPoint = consumer.transform.position + vertex + 0.02f * Vector3.up;
-				Vector3 endPoint = consumer.transform.position + vertices[(index + 1) % vertices.Count] + 0.02f * Vector3.up;
+			Handles.DrawAAPolyLine(new List<Vector3>(vertices) { vertices[0] }.ToArray());
 
-				Handles.color = index == consumer.getCurrentVertexIndex(currentIndex) ? Color.green : Color.white;
-				Handles.DrawLine(startPoint, endPoint);
-				Handles.color = Color.white;
-			});
+			Handles.color = Color.green;
+			int currentVertexIndex = consumer.getCurrentVertexIndex(currentIndex);
+			Handles.DrawAAPolyLine(vertices[currentVertexIndex], vertices[(currentVertexIndex + 1) % vertices.Count]);
+			Handles.color = Color.white;
 		}
 	}
 
