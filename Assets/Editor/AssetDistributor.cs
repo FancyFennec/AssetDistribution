@@ -11,7 +11,7 @@ public class AssetDistributor : Editor
 {
 	AssetConsumer consumer;
 
-	public List<Vector2> points = new List<Vector2>();
+	private List<Vector2> points = new List<Vector2>();
 	private bool editAssetDistribution = true;
 	private bool editPolygon = true;
 	private float randomness = 1f;
@@ -136,7 +136,6 @@ public class AssetDistributor : Editor
 		{
 			ClearObjects();
 		}
-		GUILayout.Label("Edit Polygon");
 		if (EditorGUILayout.Toggle("Edit Polygon", editPolygon))
 		{
 			editPolygon = true;
