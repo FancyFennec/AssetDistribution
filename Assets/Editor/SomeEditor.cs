@@ -31,7 +31,7 @@ public class SomeEditor : Editor
 		private void OnSceneGUI()
 	{
 		DrawPositionHandle();
-		DrawVerteces();
+		DrawVertices();
 		DrawLines();
 
 		if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.PageUp)
@@ -200,7 +200,7 @@ public class SomeEditor : Editor
 		}
 	}
 
-	private void DrawVerteces()
+	private void DrawVertices()
 	{
 		vertices.ForEach(vertex =>
 		{

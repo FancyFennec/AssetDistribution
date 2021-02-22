@@ -49,7 +49,7 @@ public class AssetDistributor : Editor
 		{
 			DrawPositionHandle();
 			DrawLines();
-			DrawVerteces();
+			DrawVertices();
 
 			if (!GUI.changed && !Event.current.alt && Event.current.type == EventType.MouseDown && Event.current.button == 0)
 			{
@@ -259,7 +259,7 @@ public class AssetDistributor : Editor
 		}
 	}
 
-	private void DrawVerteces()
+	private void DrawVertices()
 	{
 		consumer.getVertices(currentIndex).ForEach(vertex =>
 		{
